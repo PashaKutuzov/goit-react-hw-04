@@ -1,53 +1,78 @@
 import "./App.css";
-import initialContacts from "../contacts.json";
-
-import ContactForm from "./ContactForm";
-import ContactList from "./ContactList";
-import SearchBox from "./SearchBox";
+import SearchBar from "./SearchBar";
+import Loader from "./Loader";
+import LoadMoreBtn from "./LoadMoreBtn";
+import ErrorMessage from "./ErrorMessage";
+import ImageGallery from "./ImageGallery";
 import { useState, useEffect } from "react";
-
+import { fetchPhotosWithTopic } from "../search-api";
+import ImageModal from "./ImageModal";
 function App() {
-  const [contacts, setContacts] = useState(() => {
-    const savedContacts = localStorage.getItem("contacts");
-    try {
-      return savedContacts ? JSON.parse(savedContacts) : initialContacts;
-    } catch (error) {
-      console.error("Помилка парсингу JSON з localStorage:", error);
-      return initialContacts;
-    }
-  });
+  const [photos, setPhotos] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const openModal = (image) => {
+    setSelectedImage(image);
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setSelectedImage(null);
+    setIsModalOpen(false);
+  };
+
+  const handleSubmit = (topic) => {
+    setPhotos([]);
+
+    setSearch(topic);
+    setPage(1);
+  };
 
   useEffect(() => {
-    localStorage.setItem("contacts", JSON.stringify(contacts));
-  }, [contacts]);
+    if (search === "") {
+      return;
+    }
 
-  const [filter, setFilter] = useState("");
-
-  const addContacts = (newContacts) => {
-    setContacts((prevContacts) => {
-      return [...prevContacts, newContacts];
-    });
-  };
-
-  const deleteContact = (contactId) => {
-    setContacts((prevContacts) => {
-      return prevContacts.filter((contact) => contact.id !== contactId);
-    });
-  };
-
-  const filterContacts = contacts.filter((contact) =>
-    contact.name.toLowerCase().includes(filter.toLowerCase())
-  );
+    async function getData() {
+      try {
+        setLoading(true);
+        setError(false);
+        const data = await fetchPhotosWithTopic(search, page);
+        setPhotos((prevPhotos) => {
+          return [...prevPhotos, ...data];
+        });
+      } catch (err) {
+        console.log(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    getData();
+  }, [page, search]);
 
   return (
-    <div>
-      <h1>Phonebook</h1>
-      <p>{filter}</p>
-      <ContactForm onAdd={addContacts} />
-      <SearchBox value={filter} onFilter={setFilter} />
+    <>
+      <SearchBar onSubmit={handleSubmit} />
 
-      <ContactList contactsList={filterContacts} onDelete={deleteContact} />
-    </div>
+      {error && <ErrorMessage />}
+      {photos.length > 0 && <ImageGallery items={photos} openModal={openModal}/>}
+      {loading && <Loader />}
+      {photos.length > 0 && (
+        <LoadMoreBtn onClick={() => setPage(page + 1)} Page={page} />
+      )}
+
+      <ImageModal
+        isOpen={isModalOpen}
+        onClose={closeModal}
+        image={selectedImage}
+      />
+    </>
   );
 }
 
